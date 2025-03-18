@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from aenet.xsf import read_xsf
+from aenet.AenetLab.aenet_io import read_list, write_list, load_atomic_info
+import numpy as np
+import pandas as pd
+import shutil
+import os
+
+
+def command_interpreter(command_line):
+    command_words = command_line.strip().split()
+    if len(command_words) % 2:
+        raise Exception("Commands for elements loading should be specified as the following format: 'elem1 Eatom1 elem2 Eatom2 ...'.")
+    else:
+        elems = command_words[slice(0,None,2)]
+        Eatoms = command_words[slice(1,None,2)]
+        elems_Eatoms = dict(zip(elems,Eatoms))
+        return elems_Eatoms
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            description="""Discrete cohensive energy distribution""",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--extpath','-ext',required=True,help="paths to the target dataset")
+    parser.add_argument('--Eatoms',help="Argument/command 'Eatom' should be specified in an explicit form : 'elem1 Eatom1 elem2 Eatom2 ...'")
+    parser.add_argument('--Ehull','-eh',type=float,default=1,help="Energy above the hull")
+    parser.add_argument('--visual','-vs',action="store_true",help="whether to plot sorted energy distribution")
+    parser.add_argument('--move','-mv',action="store_true",help="whether to move unqualified XSF files to trash directory")
+    args = parser.parse_args()
+    extpath = os.path.abspath(args.extpath)
+    if args.Eatoms:
+        Eatoms = command_interpreter(args.Eatoms)
+    else:
+        Eatoms_all = load_atomic_info()
+        Eatoms = {}
+        for k, v in Eatoms_all.items():
+            Eatoms[k] = v[1]
+
+    listpath = os.path.join(extpath,'list')
+    xsf_paths = read_list(listpath)
+    Ecoh, N, index = [], [], []
+    for xsf_path in xsf_paths:
+        a = read_xsf(xsf_path)
+        symbols = list(a.symbols)
+        elems = set(symbols)
+        Econf = 0
+        for elem in elems:
+            Econf += symbols.count(elem) * float(Eatoms[elem])
+        Etotal = a.calc.results['energy']
+        Ecoh.append(Etotal - Econf)
+        N.append(len(a))
+        index.append(xsf_path)
+    Ecoh_pa = np.array(Ecoh)/np.array(N)
+    Edata = pd.Series(Ecoh_pa,index=index)
+    Edata = Edata.sort_values()
+    if args.visual:
+        plt.figure()
+        plt.plot(np.arange(len(Ecoh)),Edata.values)
+        plt.xlabel('index of xsf file')
+        plt.ylabel('respective energy per atom')
+        plt.savefig('E_dist.png')
+    Emin = np.min(Edata.values)
+    Ehull = args.Ehull
+    trash_dir = os.path.join(extpath,'Trash')
+    if not os.path.isdir(trash_dir) and args.move:
+        os.makedirs(trash_dir)
+    print("Old number : %i"%len(xsf_paths))
+    for nabs, v in zip(Edata.index, Edata.values):
+        if v > Emin+Ehull:
+            n = os.path.basename(nabs)
+            xsf_paths.remove(nabs) 
+            if args.move:
+                shutil.move(nabs,os.path.join(trash_dir,n))
+    if args.move:
+        write_list(listpath,[os.path.basename(xsf_path) for xsf_path in xsf_paths])
+    print("Current number : %i"%len(xsf_paths))
+            
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,43 @@
+#!/bin/bash
+
+basepath=$(cd $(dirname $0) ; pwd -P)
+passflag=0
+while [ ${passflag} == 0 ]
+do
+    read -p "Please input the name of the Lab dir: " dirname
+    count=0
+    for i in $(seq 1 ${#dirname})
+    do
+        case "${dirname:i-1:1}" in 
+            [a-z]|[A-Z])
+                new_count=$((++count))  ;;
+            [0-9])
+                new_count=$((++count))  ;;
+            "-")
+                new_count=$((++count))  ;;
+            "_")
+                new_count=$((++count))  ;;
+            ".")
+                new_count=$((++count))  ;;
+            *)
+                echo ${dirname:i-1:1}
+                echo "Invalid Characters"
+        esac
+    done
+    if [ ${new_count} == ${#dirname} ]; then
+        passflag=1
+    fi
+done
+if [ ! -d ${dirname} ]; then
+    mkdir ${dirname}
+    cp -r ${basepath}/tools/shell ${dirname}/shell
+    cp ${basepath}/jsons/customized.json ${dirname}
+else
+    read -p "${dirname} exists, are you sure to remake it? (y/n) >" yorn
+    if [ ${yorn} == "y" ]; then
+        rm -rf ${dirname}
+        mkdir ${dirname}
+        cp -r ${basepath}/tools/shell ${dirname}/shell
+        cp ${basepath}/jsons/customized.json ${dirname}
+    fi
+fi

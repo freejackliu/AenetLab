@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import aenet.AenetLab as AL
+import json
+import os
+import argparse
+
+parser = argparse.ArgumentParser(
+        description="""Avoid overfitting by an early stop""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--index','-i',type=int,help="Index of nnpots sub-dir in train dir")
+parser.add_argument('--epoch','-e',type=int,help="Extract certain epoch nnfiles to nnpots sub-dir in condition that '--index/-i' argument is specified")
+args = parser.parse_args()
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    if not args.epoch:
+        aelab.train(earlystop=True, index=args.index)
+    else:
+        if args.index:
+            aelab.train(earlystop=True, index=args.index, epoch=args.epoch)
+        else:
+            raise Exception("'--epoch/-e' arg is only valid in condition that '--index/-i' is specified")

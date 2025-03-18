@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+
+from aenet.xsf import read_xsf
+from aenet.calculator import ANNCalculator
+from aenet.AenetLab.aenet_io import read_list, load_nnfiles
+from aenet.AenetLab.plottools import plot_eos
+import numpy as np
+import pandas as pd
+import aenet.AenetLab as AL
+import os
+import argparse
+
+parser = argparse.ArgumentParser(
+        description="""Validate if potentials can reproduce DFT energy of distorted crystalline structures""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--index','-i',type=int,help="Index of nnpots sub-dir in the train dir")
+parser.add_argument('--nnpath','-nnp',type=str,help="Path to load the NN potentials if specified")
+parser.add_argument('--scpath','-scp',type=str,required=True,help="Path to assign a dataset directory if a prior verification is needed")
+parser.add_argument('--label','-lb',type=str,help="Label of the eos curve")
+args = parser.parse_args()
+
+if args.nnpath and args.index:
+    raise AttributeError("'nnpath' and 'index' can not be specified together")
+elif not (args.nnpath or args.index):
+    raise AttributeError(" Either 'nnpath' or 'index' should be specified")
+v_outdir = os.path.abspath(args.scpath)
+
+if args.nnpath:
+    nn_files_path = os.path.abspath(args.nnpath)
+else:
+    raise Exception("Please assign the path to NN potentials")
+potentials = load_nnfiles(nn_files_path)
+ann_calc = ANNCalculator(potentials=potentials)
+
+list_path = os.path.join(v_outdir,'list')
+if os.path.exists(list_path):
+    v_outdir_list = read_list(list_path)
+else:
+    raise FileNotFoundError("'%s' not found."%list_path)
+Neos = len(v_outdir_list)
+
+E_dft = np.zeros((1,Neos))
+E_ann = np.zeros((1,Neos))
+V_cell = np.zeros((1,Neos))
+
+for ind, v in enumerate(v_outdir_list):
+    atoms = read_xsf(v)
+    E_dft[0][ind] = atoms.calc.results['energy']/len(atoms)
+    atoms.set_calculator(ann_calc)
+    E_ann[0][ind] = atoms.get_potential_energy()/len(atoms)
+    V_cell[0][ind] = atoms.get_volume()
+Emin_dft = min(E_dft)
+Emin_ann = min(E_ann)
+dE = Emin_ann - Emin_dft
+E_ann[0] -= dE
+dft_frame = pd.DataFrame(E_dft,columns=V_cell[0],index=[args.label])
+ann_frame = pd.DataFrame(E_ann,columns=V_cell[0],index=[args.label])
+vol_frame = pd.DataFrame(V_cell,columns=V_cell[0],index=[args.label])
+E_dft = np.array(dft_frame.sort_index(axis=1).values)
+E_ann = np.array(ann_frame.sort_index(axis=1).values)
+V_cell = np.array(vol_frame.sort_index(axis=1).values)
+plot_dir = os.path.join(v_outdir, os.path.basename(nn_files_path))
+if not os.path.isdir(plot_dir):
+    os.makedirs(plot_dir)
+plot_eos(plot_dir, E_dft, E_ann, V_cell, labels=[args.label])
+
+
+
+
+

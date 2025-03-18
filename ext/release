@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cp conv_insert.py basin_hopping.py select.py MD.py opt.py disturb.py geometry.py read_dump.py taylor_1D.py taylor.py vor_insert.py xsf.py AenetLab/ext

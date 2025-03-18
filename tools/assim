@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+import os
+from aenet.AenetLab.aenet_io import write_list,write_isfl
+
+def dissimilate(path):
+    #list_path = os.path.join(path,'list')
+    #tag_path  = os.path.join(path,'.isdataset')
+    #if os.path.exists(list_path):
+    #    os.remove(list_path)
+    #if os.path.exists(tag_path):
+    #    os.remove(tag_path)
+    for n in os.listdir(path):
+        if n.split('.')[-1] != 'xsf':
+            os.remove(os.path.join(path,n))
+
+
+def assimilate(path):
+    #rcpath = get_rcpath(path)
+    ns = os.listdir(path)
+    r_xsf_paths = []
+    for n in ns:
+        if n.split('.')[-1] == 'xsf':
+            r_xsf_paths.append(n)
+    write_list(os.path.join(path,'list'),r_xsf_paths)
+    write_isfl(os.path.join(path,'.isdataset'),True)
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            description="""Assimilation/Dissimilation a dataset dir""",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--versa','-v',action='store_true',help="a flag-arg for dissimilation")
+    parser.add_argument('--extpaths','-ext',required=True,type=str,nargs='+',help="paths to the target datasets")
+
+    args = parser.parse_args()
+    for extpath in args.extpaths:
+        extpath = os.path.abspath(extpath)
+        if args.versa:
+            dissimilate(extpath)
+            print('Dissimilation done')
+        else:
+            assimilate(extpath)
+            print('Assimilation done')
+        
+
+if __name__ == "__main__":
+    main()
+

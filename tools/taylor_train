@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+
+import os
+import aenet.AenetLab as AL
+import json
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    aelab.taylor3D()
+    aelab.generate()
+    aelab.train()

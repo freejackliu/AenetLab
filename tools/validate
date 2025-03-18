@@ -1,0 +1,136 @@
+#!/usr/bin/env python
+
+from aenet.xsf import read_xsf
+from aenet.calculator import ANNCalculator
+from aenet.AenetLab.aenet_io import read_list, load_nnfiles
+from aenet.AenetLab.error import *
+import aenet.AenetLab as AL
+import os
+import json
+import argparse
+
+parser = argparse.ArgumentParser(
+        description="""Validate if potentials can reproduce DFT energy and forces""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--verbosity','-vb',action='store_true',help="Print the detailed atomic info")
+parser.add_argument('--index','-i',type=int,help="Index of nnpots sub-dir in the train dir")
+parser.add_argument('--addition','-a',default=1,type=int,help="Additional configurations for verification")
+parser.add_argument('--nnpath','-nnp',type=str,help="Path to load the NN potentials if specified")
+parser.add_argument('--scpath','-scp',type=str,help="Path to assign a dataset directory if a prior verification is needed")
+parser.add_argument('--visual','-vs',action='store_true',help="Visualize the error distribution")
+args = parser.parse_args()
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab  = AL.AenetLab(textjson)
+    E_unit = aelab.units['E_unit']
+    F_unit = aelab.units['F_unit']
+    angle_unit = aelab.units['angle_unit']
+    style  = aelab.crt['style']
+    outdir = aelab.crtd[style]['outdir']
+    v_outdir = 'Validate_'+outdir
+    if args.scpath:
+        v_outdir = os.path.abspath(args.scpath)
+    else:
+        aelab.set([['Taylor','do_taylor',False],
+                   ['CreateDetails',style,'outdir',v_outdir],
+                   ['CreateDetails',style,'nsamples',args.addition],
+                   ['CreateDetails',style,'isdataset',True],
+                   ['CreateDetails',style,'inc_init',False]])
+        aelab.create()
+
+    nn_files_path = ''
+    if args.nnpath:
+        nn_files_path = os.path.abspath(args.nnpath)
+    else:
+        if args.index:
+            nn_files_path = os.path.join(aelab.trn['outdir'],'%d_nnpots'%args.index)
+        else:
+            nn_files_path = os.path.join(aelab.trn['outdir'],'1_nnpots')
+    if nn_files_path == '':
+        raise Exception("Please assign the path to NN potentials")
+    potentials = load_nnfiles(nn_files_path)
+    ann_calc = ANNCalculator(potentials=potentials)
+
+    with open('Info_validation','w') as ivf:
+        list_path = os.path.join(v_outdir,'list')
+        if os.path.exists(list_path):
+            v_outdir_fakelist = read_list(list_path)
+            v_outdir_list = [v_outdir_fake.split('/')[-1] for v_outdir_fake in v_outdir_fakelist]
+        else:
+            v_outdir_list = []
+            for na in os.listdir(v_outdir):
+                if na.split('.')[-1] == 'xsf':
+                    v_outdir_list.append(na)
+
+        dir_dic = {
+                'nnpath' : nn_files_path,
+                'scpath' : v_outdir   
+                }
+        print_dirpath(dir_dic,ivf)
+        print_unit_info(E_unit,F_unit,angle_unit,ivf)
+        
+        Natom = 0
+        ae_list, ae_sum = [], 0
+        afe_list, afe_sum = [], 0
+        age_list, age_sum = [], 0
+        for k, v in enumerate(v_outdir_list):
+            fv = os.path.join(v_outdir,v)
+            atoms = read_xsf(fv)
+            E_dft = atoms.calc.results['energy']
+            Fs_dft = atoms.calc.results['forces']
+            atoms.set_calculator(ann_calc)
+            E_ann = atoms.get_potential_energy()
+            Fs_ann = atoms.get_forces()
+            if args.verbosity:
+                ivf.write('%s '%k+fv+'\n')
+            print_error_header(ivf,args.verbosity)
+            
+            ae = print_energy_error(E_dft,E_ann,ivf,args.verbosity)
+            if args.visual:
+                afe, age, fe_list, ge_list = print_forces_error(atoms.symbols,Fs_dft,Fs_ann,angle_unit,ivf,args.verbosity,args.visual)
+            else:
+                afe, age = print_forces_error(atoms.symbols,Fs_dft,Fs_ann,angle_unit,ivf,args.verbosity)
+
+            Natom += len(atoms)
+            ae_sum += ae
+            afe_sum += afe
+            age_sum += age
+            if args.visual:
+                ae_list += [ae/len(atoms)]*len(atoms)
+                afe_list += fe_list
+                age_list += ge_list
+            if args.verbosity:
+                ivf.write('\n')
+
+        print_MAE('energy',ae_sum,Natom,ivf)
+        print_MAE('force',afe_sum,Natom,ivf)
+        print_MAE('angle',age_sum,Natom,ivf)
+        print('Validation done')
+
+        if args.visual:
+            from aenet.AenetLab.plottools import plot_error
+            if args.nnpath:
+                print("Warning : you specified an ext nnpath which may not be consistent with current taskid, remember to rename the output files to avoid conflicts")
+
+            E_err = np.array(ae_list)
+            Fa_err = np.array(afe_list)
+            angle_err = np.array(age_list)
+            
+            if not args.index:
+                plot_error(aelab, E_err, Fa_err, angle_err)
+            else:
+                plot_error(aelab, E_err, Fa_err, angle_err, index=args.index)
+
+
+
+
+

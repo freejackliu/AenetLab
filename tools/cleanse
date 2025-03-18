@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+from aenet.AenetLab.aenet_io import read_list,write_list
+from aenet.xsf import read_xsf
+from aenet.geometry import check_nomic_distance, check_mic_distance
+import numpy as np
+import os
+import shutil
+import sys
+
+
+def tolerance_cleansing(atoms, Ftor):
+    #if not Etor:
+    #    Etor = 5  #eV
+    if not Ftor:
+        Ftor = 20 #eV/Angs
+    #E = atoms.calc.results['energy']
+    F = [np.linalg.norm(atoms.calc.results['forces'][i]) for i in range(len(atoms))]
+    cleansing_flag = True
+    #if E <= Etor and np.max(F) <= Ftor: 
+    if np.max(F) <= Ftor: 
+        cleansing_flag = False
+    return cleansing_flag
+
+
+def overlapping_cleansing(atoms, rmin):
+    cleansing_flag = check_mic_distance(atoms, rmin=rmin)
+    return cleansing_flag
+
+
+def isolated_cleansing(atoms, riso):
+    cleansing_flag = check_nomic_distance(atoms, riso=riso)
+    return cleansing_flag
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+            description="""Cleanse datasets in the specified labdir""",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    #parser.add_argument('--Etor','-E',type=float,help="the upper bound of energy within tolerance")
+    parser.add_argument('--Ftor','-F',type=float,help="the upper bound of forces within tolerance")
+    parser.add_argument('--scpaths','-scp',nargs='+',help="Paths to datasets for cleansing")
+    parser.add_argument('--trpaths','-tr',nargs='+',help="Paths to trash directories which acts as a recycle bin")
+    args = parser.parse_args()
+
+    lab_path = os.getcwd()
+    source_paths = []
+
+    if not args.scpaths:
+        for na in os.listdir(lab_path):
+            source_path = os.path.join(lab_path,na)
+            data_flag_path = os.path.join(source_path,'.isdataset')
+            if os.path.exists(data_flag_path):
+                source_paths.append(source_path)
+    else:
+        source_paths = args.scpaths
+    source_paths = list(source_paths)
+
+    if not args.trpaths:
+        trash_paths = ["Trash-%i"%i for i in range(len(source_paths))] 
+    else:
+        trash_paths = args.trpaths
+    trash_paths = list(trash_paths)
+
+    #Etor = args.Etor
+    Ftor = args.Ftor
+    has_mpi4py = True
+    #if os.path.exists('Info_cleanse'):
+    #    os.remove('Info_cleanse')
+    #sys.stdout = open('Info_cleanse','a')
+    try:
+        import mpi4py.MPI as MPI
+    except:
+        has_mpi4py = False
+
+    for trash_path, source_path in zip(trash_paths, source_paths): 
+        if not os.path.isdir(trash_path):
+            os.makedirs(trash_path)
+        if has_mpi4py:
+            comm = MPI.COMM_WORLD
+            comm_rank = comm.Get_rank()
+            comm_size = comm.Get_size()
+            if comm_rank == 0:
+                n_xsfs_path_list = read_list('%s/list'%source_path)
+                xsfs_path_list = [os.path.join(source_path,os.path.basename(i)) for i in n_xsfs_path_list]
+                sys.stdout.write('old size : %d\n'%len(xsfs_path_list))
+            xsfs_path_list = comm.bcast(xsfs_path_list if comm_rank == 0 else None, root=0)
+            files_size = len(xsfs_path_list)
+            local_files_offset = np.linspace(0, files_size, comm_size+1).astype('int')
+            local_files = xsfs_path_list[local_files_offset[comm_rank]: local_files_offset[comm_rank+1]]
+            local_cleansing_dict = dict(zip(local_files,[False]*len(local_files)))
+            sys.stdout.write("%d/%d processor gets %d/%d files\n" % (comm_rank,comm_size,len(local_files),files_size))
+            for local_file in local_files:
+                try:
+                    atoms = read_xsf(local_file)
+                except:
+                    shutil.move(xsf,trash_path)
+                    sys.stdout.write('invalid format : %s\n'%xsf)
+                else:
+                    f_1 = tolerance_cleansing(atoms, Ftor)
+                    f_2 = overlapping_cleansing(atoms, rmin=1.0)
+                    f_3 = isolated_cleansing(atoms, riso=7.0)
+                    cf_list = [f_1,f_2,f_3]
+                    cleansing_flag = any(cf_list)
+                    if cleansing_flag:
+                        if f_1:
+                            sys.stdout.write('out of tolerance : %s\n'%local_file)
+                        if f_2:
+                            sys.stdout.write('overlapping : %s\n'%local_file)
+                        if f_3:
+                            sys.stdout.write('isolated : %s\n'%local_file)
+                        local_cleansing_dict[local_file] = True
+            local_cleansing_dict = comm.gather(local_cleansing_dict, root = 0)
+            if comm_rank == 0:
+                new_xsfs_path_list, new_nlist = [], []
+                delete_xsfs_path_list = []
+                cleansing_dict = {}
+                for i in local_cleansing_dict:
+                    cleansing_dict.update(i)
+                for xsf in xsfs_path_list:
+                    if not cleansing_dict[xsf]:
+                        new_xsfs_path_list.append(xsf)
+                        new_nlist.append(os.path.basename(xsf))
+                    else:
+                        delete_xsfs_path_list.append(xsf)
+                        shutil.move(xsf,trash_path)
+                write_list('%s/list'%source_path,new_nlist)
+                sys.stdout.write('new size : %d\n'%len(new_xsfs_path_list))
+        else:
+            n_xsfs_path_list = read_list('%s/list'%source_path)
+            xsfs_path_list = [os.path.join(source_path,os.path.basename(i)) for i in n_xsfs_path_list]
+            sys.stdout.write('old size : %d\n'%len(xsfs_path_list))
+
+            new_xsfs_path_list, new_nlist = [], []
+            delete_xsfs_path_list = []
+            for xsf in xsfs_path_list:
+                try:
+                    atoms = read_xsf(xsf)
+                except:
+                    shutil.move(xsf,trash_path)
+                    sys.stdout.write('invalid format : %s\n'%xsf)
+                else:
+                    f_1 = tolerance_cleansing(atoms, Ftor)
+                    f_2 = overlapping_cleansing(atoms, rmin=1.0)
+                    f_3 = isolated_cleansing(atoms, riso=7)
+                    cf_list = [f_1, f_2, f_3]
+                    cleansing_flag = any(cf_list)
+                    if cleansing_flag:
+                        delete_xsfs_path_list.append(xsf)
+                        shutil.move(xsf,trash_path)
+                        if f_1:
+                            sys.stdout.write('out of tolerance : %s\n'%xsf)
+                        if f_2:
+                            sys.stdout.write('overlapping : %s\n'%xsf)
+                        if f_3:
+                            sys.stdout.write('isolated : %s\n'%xsf)
+                    else:
+                        new_xsfs_path_list.append(xsf)
+                        new_nlist.append(os.path.basename(xsf))
+
+            write_list('%s/list'%source_path,new_nlist)
+            sys.stdout.write('new size : %d\n'%len(new_xsfs_path_list))
+            
+
+if __name__ == '__main__':
+    main()

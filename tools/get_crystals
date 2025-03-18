@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from pymatgen.ext.matproj import MPRester
+import os
+import copy
+import argparse
+
+
+class GetConfig:
+    def __init__(self,symbols):
+        self.symbols = symbols
+        self.filenames = []
+        self.m = MPRester()
+        self.pathnow = os.getcwd()
+    
+     
+    def write_to(self,source_list,source_tag):        
+        for index,struct in enumerate(source_list):
+            struct.to(filename=source_tag+'/'+self.filenames[index])
+
+    
+    def get_structure_list(self, *args):
+        structures = []              
+        chemids = self.m.get_materials_ids('-'.join(self.symbols))
+        if args[0]:
+           elementids = []
+           for symbol in self.symbols:
+               elementids.extend(self.m.get_materials_ids(symbol))
+           chemids=list(set(chemids)-set(elementids))
+        for chemid in chemids:
+            structures.append(self.m.get_structure_by_material_id(chemid))
+        self.filenames.extend(_getFileNameFromList(chemids))                      
+        return structures
+
+def _getFileNameFromList(mpids):
+    namelist = []
+    for mpid in mpids:
+        namelist.append('-'+mpid+'.cif')
+    return namelist
+    
+
+def mkEmptyDir(path): 
+    pathcopy = copy.copy(path)       
+    if not os.path.exists(path):
+        os.mkdir(path)
+        print('Files will be stored at %r'%path)
+        return path
+    else:
+        ic = 1
+        while os.path.exists(pathcopy):
+            pathcopy = path+'-%i'%ic
+            ic += 1
+        os.mkdir(pathcopy)
+        print('Files will be stored at %r'%pathcopy)
+        return pathcopy
+
+def renamefiles(path):
+    for root,dirs,files in os.walk(path):
+        for index,ifile in enumerate(files,start=1):
+            with open(path+'/'+ifile) as f:
+                 f.readline()
+                 chemformula=f.readline().rstrip().replace('data_','')
+            os.rename(path+'/'+ifile,path+'/'+'%03d'%index+'_'+chemformula+ifile)
+    return
+
+                        
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+            description="""Get original structures from Materials Project""",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--symbols','-s',required=True,nargs='+',help='Arguments for elements. e.g., python GetConfig.py -s Cu Zr')
+    parser.add_argument('--onlycompound','-oc',action='store_true',help='With this flag,the code only gets structures of compounds')
+    args = parser.parse_args()
+    symbols = args.symbols
+    oc_flag = args.onlycompound    
+    path = os.getcwd()+'/'+'-'.join(symbols)
+    newpath = mkEmptyDir(path)
+    InitialConfig = GetConfig(symbols)
+    structures = InitialConfig.get_structure_list(oc_flag)
+    InitialConfig.write_to(structures,newpath)
+    renamefiles(newpath)
+    

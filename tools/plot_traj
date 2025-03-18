@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+
+from aenet.AenetLab.aenet_io import read_list, load_nnfiles
+from aenet.calculator import ANNCalculator
+from aenet.xsf import read_xsf
+import json
+import os
+import argparse
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser(
+       description="""Plot a time-dependant energy traj to visualize the prediction capability of ML models""",
+       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--scpath','-scp',required=True,help="Path to the source dataset.")
+parser.add_argument('--nnpaths','-nnp',required=True,nargs='+',help="Paths to nn potential files.")
+parser.add_argument('--labels','-l',nargs='+',help="Labels for nnpaths")
+parser.add_argument('--timestep','-ts',default=0.002,type=float,help="Timestep (ps)")
+parser.add_argument('--interval','-i',default=1,type=int,help="Interval for every index, i.e. dump one snapshot per 5 steps and select every 5 snapshots(images), then the interval should be 5*5 = 25")
+args = parser.parse_args()
+
+if args.labels:
+    if len(args.labels) == len(args.nnpaths):
+        labels = args.labels
+    else:
+        raise ValueError("The length of args.labels should be in consistent with that of args.nnpaths")
+
+scp = os.path.abspath(args.scpath)
+lp = os.path.join(scp,'list')
+
+if not os.path.exists(lp):
+    raise FileNotFoundError("'list' not found in : %s"%scp)
+else:
+    xsf_names = read_list(lp)
+
+E_dft = []
+E_ann = []
+for ind, xsf_name in enumerate(xsf_names):
+    xsf_path = os.path.join(scp, xsf_name)
+    a = read_xsf(xsf_path)
+    E_dft.append(a.calc.results['energy'])
+    E_ann_tmp = []
+    for nnp in args.nnpaths:
+        potentials = load_nnfiles(nnp)
+        ann_calc = ANNCalculator(potentials)
+        a.set_calculator(ann_calc)
+        ann_energy = a.get_potential_energy()
+        E_ann_tmp.append(ann_energy)
+        ann_calc.release()
+    E_ann.append(E_ann_tmp)
+
+t_index = np.arange(len(xsf_names))
+t = t_index * args.timestep * args.interval
+E_dft = np.array(E_dft)
+E_ann = np.array(E_ann).T
+plt.plot(t, E_dft, label='DFT benchmark')
+for ind, E_ann_i in enumerate(E_ann):
+    if args.labels:
+        plt.plot(t, E_ann_i, label=labels[ind])
+    else:
+        plt.plot(t, E_ann_i, label='NN_%s'%ind)
+plt.xlabel(" Time (ps)")
+plt.ylabel(" Potential Energy (eV)")
+plt.legend()
+plt.savefig("E_traj.png")
+
+

@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+
+try:
+    import mpi4py
+except ImportError:
+    pass
+import sys
+import argparse
+import numpy as np
+from ase.io import read
+from ase.parallel import world
+from aenet.libenv import SphericalChebyshev
+
+
+def build_sample_features(file_list, symbols, nmax, lmax, rcut):
+    "Create per-sample feature vectors from basis setups."
+    symbols = symbols.split()
+    basis = SphericalChebyshev(symbols, nmax, lmax, rcut)
+    nrows = len(file_list)
+    ncols = (nmax + 1)*(lmax + 1)*min(max(len(symbols), 1), 2)
+
+    features = np.zeros((nrows, ncols), dtype=np.float64)
+    for i in range(nrows):
+        if i % world.size != world.rank:
+            continue
+        a = read(file_list[i], parallel=False)
+        fp = basis.evaluate(a).mean(axis=0)
+        features[i, :] = fp[:]
+    world.sum(features)
+
+    return features
+
+
+def cur_select(m, nselect, niter=0):
+    """Select columns of m using the CUR method."""
+    nselect = min(m.shape[1], nselect)
+    f = np.sum(m**2)
+    p = np.sum(m**2, axis=0)/f
+    selected = (-p).argsort()[0:nselect]
+    mp = m[:, selected] @ np.linalg.pinv(m[:, selected]) @ m
+    err = np.sqrt(np.sum((m - mp)**2)/f)
+    rng = np.random.default_rng()
+    for i in range(niter):
+        new_selected = rng.choice(m.shape[1], nselect, p=p, replace=False)
+        mp = m[:, new_selected] @ np.linalg.pinv(m[:, new_selected]) @ m
+        new_err = np.sqrt(np.sum((m - mp)**2)/f)
+        if (new_err < err):
+            selected = new_selected
+            err = new_err
+    selected.sort()
+
+    return selected, err
+
+
+def cur_select_svd(m, nselect, niter=0):
+    """Select columns of m using the CUR method based on SVD decomposition."""
+    nselect = min(m.shape[1], nselect)
+    f = np.sum(m**2)
+    _, s, vh = np.linalg.svd(m)
+    k = (s > 1e-13).sum() // 2
+    p = nselect*np.sum(vh[0:k, :]**2, axis=0)/k
+    p[p > 1.0] = 1.0
+    selected = (-p).argsort()[0:nselect]
+    mp = m[:, selected] @ np.linalg.pinv(m[:, selected]) @ m
+    err = np.sqrt(np.sum((m - mp)**2)/f)
+    rng = np.random.default_rng()
+    for i in range(niter):
+        p_minus_r = p - rng.random(size=p.shape[0])
+        new_selected = (-p_minus_r).argsort()[0:nselect]
+        mp = m[:, new_selected] @ np.linalg.pinv(m[:, new_selected]) @ m
+        new_err = np.sqrt(np.sum((m - mp)**2)/f)
+        if (new_err < err):
+            selected = new_selected
+            err = new_err
+    selected.sort()
+
+    return selected, err
+
+
+def parse_cmd():
+    parser = argparse.ArgumentParser(
+        description="Get sparsed structures using mean global similarity kernel."
+    )
+    parser.add_argument("symbols", help="Chemical symbols of species", type=str)
+    parser.add_argument("nmax", type=int, help="Maximum radial expansion order")
+    parser.add_argument("lmax", type=int, help="Maximum angular expansion order")
+    parser.add_argument("rcut", type=float, help="Radial cutoff")
+    parser.add_argument("N", type=int, help="Number of sparse outputs")
+    parser.add_argument("input", type=str, help="List of atoms structure files")
+    parser.add_argument("output", type=str, help="Selected list of atoms structure files")
+    parser.add_argument("--niter", type=int, default=0, help="Number of CUR iterations")
+    parser.add_argument("--svd", action="store_true", help="Use svd based column selection")
+    args = parser.parse_args()
+
+    return args
+
+
+def main():
+    args = parse_cmd()
+
+    file_list = [l.strip() for l in open(args.input, "r").readlines()]
+
+    features = build_sample_features(
+        file_list, args.symbols, args.nmax, args.lmax, args.rcut
+    )
+
+    if world.rank == 0:
+        scaled_features = (features - features.mean(axis=0))/features.std(axis=0)
+        m = scaled_features.T
+        niter = max(0, args.niter)
+        column_select = cur_select_svd if args.svd else cur_select
+        selected, error = column_select(m, args.N, niter)
+        with open(args.output, "w") as o:
+            for i in selected:
+                o.write(file_list[i] + "\n")
+        print("Approximation error = {}".format(error))
+
+
+if __name__ == "__main__":
+    main()

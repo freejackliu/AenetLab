@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+
+import os
+import aenet.AenetLab as AL
+from aenet.AenetLab.aenet_io import load_atomic_info
+from aenet.xsf import read_xsf
+import json
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+def eval_Ecoh(xsf_paths):
+    Eatoms_all = load_atomic_info()   
+    Eatoms, Ecoh, N = {}, [], []
+    for k, v in Eatoms_all.items():
+        Eatoms[k] = v[1]
+    for xsf_path in xsf_paths:
+        a = read_xsf(xsf_path)
+        symbols = list(a.symbols)
+        elems = set(symbols)
+        Econf = 0
+        for elem in elems:
+            Econf += symbols.count(elem) * float(Eatoms[elem])
+        Etotal = a.calc.results['energy']
+        Ecoh.append(Etotal - Econf)
+        N.append(len(a))
+    Ecoh_pa = np.array(Ecoh)/np.array(N)
+    return Ecoh_pa
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    aelab.taylor3D()
+    logic_dic = aelab.generate()
+    train_xsfs, test_xsfs = [], []
+    for k, v in logic_dic.items():
+        if v:
+            test_xsfs.append(k)
+        else:
+            train_xsfs.append(k)
+    test_Ecoh = eval_Ecoh(test_xsfs)
+    train_Ecoh = eval_Ecoh(train_xsfs)
+    bmax = max(max(test_Ecoh),max(train_Ecoh))
+    bmin = min(min(test_Ecoh),min(train_Ecoh))
+    bins = np.linspace(bmin, bmax, 15)
+    test_hist,_ = np.histogram(test_Ecoh, bins, density=True)
+    train_hist,_ = np.histogram(train_Ecoh, bins, density=True)
+    fig = plt.figure()
+    ax1 = fig.add_subplot(111)
+    ax2 = ax1.twinx()
+    width = (bins[1] - bins[0])*0.4
+    bins_shifted = bins + width
+    lns1 = ax1.bar(bins[:-1],test_hist,width,align='edge',color='b',label='Testset')
+    lns2 = ax2.bar(bins_shifted[:-1],train_hist,width,align='edge',color='r',label='Trainset')
+    lns = [lns1,lns2]
+    labs = [l.get_label() for l in lns]
+    plt.legend(lns, labs, loc=0)
+    ax2.set_yticks([])
+    ax1.set_xlabel("Cohensive Energy (eV/atom)")
+    ax1.set_ylabel("Occurence Frequency")
+    plt.savefig("02-Generate/EnergyDist.png")
+    aelab.set([
+        ['Train','outdir','03-TrainsetScaling'],
+        ['Train','iterations',10]
+        ])
+    aelab.train(ignore_id=True)

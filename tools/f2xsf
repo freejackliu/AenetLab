@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+
+from ase.io import read
+from aenet.xsf import write_xsf
+import os
+import sys
+
+basename = sys.argv[1].split('.')[0]
+
+if not os.path.isdir(basename):
+    os.makedirs(basename)
+a = read(sys.argv[1],format='vasp-xml',index=':')
+
+for ind, a_i in enumerate(a):
+    write_xsf('%s/%i.xsf'%(basename,ind),a_i)
+

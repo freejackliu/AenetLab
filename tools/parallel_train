@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+import os
+import subprocess
+import aenet.AenetLab as AL
+import argparse
+import json
+
+parser = argparse.ArgumentParser(
+         description="Parallel training by concurrency.",
+         formatter_class=argparse.ArgumentDefaultsHelpFormatter
+         )
+add = parser.add_argument
+add("itask", type=int, help="index of concurrent tasks")
+add("iterations", type=int, help="epoch number of iterations")
+add("-w", "--onlywrite", action="store_true", help="whether run training or only write input configuration files")
+add("--earlystop", action="store_true", help="whether run earlystop after training")
+args = parser.parse_args()
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    aelab.set([
+        ['Train','initdir','03-TrainsetScaling'],
+        ['Train','outdir','04-Train/%i-train'%args.itask],
+        ['Train','iterations',args.iterations]
+        ])
+    if args.onlywrite:
+        aelab.train(onlywrite=True)
+    else:
+        aelab.train(ignore_id=True)
+        if args.earlystop:
+            aelab.train(earlystop=True,index=1,ignore_id=True)
+

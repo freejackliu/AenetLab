@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+
+from aenet.AenetLab.aenet_io import get_max_dirindex,write_isfl,read_isfl
+import aenet.AenetLab as AL
+import os
+import json
+import shutil
+import argparse
+
+
+def clean_dir(path):
+    for na in os.listdir(path):
+        na_path = os.path.join(path,na)
+        if not os.path.isdir(na_path):
+            os.remove(na_path)
+
+
+def rewind_to_first(dir_dic):
+    for dir in dir_dic.values():
+        if os.path.isdir(dir):
+            shutil.rmtree(dir)
+    if os.path.exists('tseed'):
+        os.remove('tseed')
+    write_isfl('.taskid',1)
+
+
+def rewind_to_last(dir_dic,index,tid):
+    taypath = os.path.join(dir_dic['tay'],'%d_Taylorset'%index)
+    genpath = os.path.join(dir_dic['gen'],'%d_gen'%index)
+    steppath = os.path.join(dir_dic['trn'],'%d_step_details'%index)
+    nnpath = os.path.join(dir_dic['trn'],'%d_nnpots'%index)
+    plotpath = os.path.join(dir_dic['plt'],'%d_plot'%index)
+    if os.path.isdir(taypath):
+        shutil.rmtree(taypath)
+    clean_dir(taydir)
+    if os.path.isdir(genpath):
+        shutil.rmtree(genpath)
+    clean_dir(gendir)
+    if os.path.isdir(steppath):
+        shutil.rmtree(steppath)
+    if os.path.isdir(nnpath):
+        shutil.rmtree(nnpath)
+    clean_dir(trndir)
+    if os.path.isdir(plotpath):
+        shutil.rmtree(plotpath)
+    if index == tid-1:
+        write_isfl('.taskid',tid-1)
+    elif index == tid:
+        write_isfl('.taskid',tid)
+    else:
+        raise Exception("Something goes wrong with the task id! Check the number in the '.taskid' file")
+
+
+parser = argparse.ArgumentParser(
+        description="""rewind the Lab environment back to the last/first index""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--first','-f',action='store_true',help="rewind to the first index")
+args = parser.parse_args()
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    taydir = aelab.tay['outdir']
+    gendir = aelab.gen['outdir']
+    trndir = aelab.trn['outdir']
+    parallel_prepare = '03-TrainsetScaling'
+    parallel_train = '04-Train'
+    plotdir = 'visual'
+    dir_dic = {
+            'tay' : taydir,
+            'gen' : gendir,
+            'trn' : trndir,
+            'trn-pp': parallel_prepare,
+            'trn-pt': parallel_train,
+            'plt' : plotdir
+            }
+    if args.first:
+        rewind_to_first(dir_dic)
+        print('Rewinding to index : 1')
+    else:
+        max_index = get_max_dirindex(taydir,'Taylorset')
+        task_index = read_isfl('.taskid')
+        if max_index:
+            rewind_to_last(dir_dic,max_index,task_index)
+            print('Rewinding to index : %d'%max_index)
+        else:
+            rewind_to_first(dir_dic)
+            print('Rewinding to index : 1')
+
+    

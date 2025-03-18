@@ -1,0 +1,33 @@
+{
+    "Types":{
+        "Cu":{
+            "lammps_number" : 1
+            },
+        "Zr":{
+            "lammps_number" : 2
+            },
+        "O":{
+            "lammps_number" : 3
+            }
+    },
+    
+    "Create":{
+        "style"         :   "Disturb"
+    },
+
+    "CreateDetails":{
+
+        "Disturb":{
+            "initdir"   :   "CuZrO",
+            "nsamples"  :   10,
+            "outdir"    :   "Disturb_Set"
+            },
+
+            
+        "Vasp":{
+            "continue_flag" :   false
+            }
+
+    }
+
+}

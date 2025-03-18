@@ -1,0 +1,306 @@
+{
+    "Types":{
+    },
+
+    "Units":{
+        "E_unit"        :   "eV",
+        "L_unit"        :   "Angs",
+        "F_unit"        :   "eV/Angs",
+        "angle_unit"    :   "degree"
+    },
+
+    "TestPercent"       :   "10%",
+    "TestSeed"          :   null,
+    
+    "Create":{
+        "style"         :   ""
+    },
+
+    "CreateDetails":{
+        "LJDimer":{
+            "outdir"    :   "Dimer_Set"
+            },
+
+        "Replace":{
+            "initdir"   :   "",
+            "nsamples"  :   1,
+
+            "command"   :   "default",
+            "style"     :   "default",
+            "inner"     :   "default",
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default",
+            "outdir"    :   "Rep_Set"
+            },
+
+        "Disturb":{
+            "initdir"   :   "",
+            "nsamples"  :   1,
+
+            "defm_lim"  :   "default",
+            "ratt_size" :   "default",
+            "no_delete" :   "default",
+            "del_perc"  :   "default",
+            "replicate" :   "default",
+            "rep_uplim" :   "default",
+            "bond_range":   "default",
+            "peak_thres":   "default",
+            "eos_interv":   "default",
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default",
+            "outdir"    :   "Disturb_Set"
+            },
+
+        "VorInsert":{
+            "initdir"   :   "Zr128Cu64",
+            "nsamples"  :   5,
+
+            "max_rins"  :   "default",
+            "cnst_rins" :   "default",
+            "cnst_num"  :   "default",
+            "ins_elem"  :   "O",
+            "strategy"  :   "default",
+            "dmin"      :   "default",
+            "dmax"      :   "default",
+            "nbins"     :   "default",
+            "density"   :   "default",
+         "only_selected":   "default",
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default", 
+            "outdir"    :   "Zr128Cu64O2"
+            },
+
+        "ConvexInsert":{
+            "initdir"   :   "VorInsert_Set",
+            "nsamples"  :   10,
+
+            "ins_elem"  :   "O",
+            "ins_num"   :   1,
+            "ratt_size" :   "default",
+            "dmin"      :   "default",
+            "area_range":   "default",
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default",
+            "outdir"    :   "Cluster_Set"
+            },
+        
+        "DumpSelect":{
+            "initdir"   :   "dump",
+            "nsamples"  :   10,
+            "style"     :   "index",
+            "delay"     :   "default",
+            "niter"     :   "default",
+            "etor"      :   "default",
+            "nn_path"   :   null,
+                        
+            "outfmt"    :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "outdir"    :   "DumpSelect_Set"
+            },
+
+        "Xml2xsfs":{
+            "initdir"   :   "xml",
+            "nsamples"  :   100,
+            "style"     :   "index",
+            "delay"     :   "default",
+            "niter"     :   "default",
+            "etor"      :   "default",
+            "nn_path"   :   null,
+
+            "outfmt"    :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "outdir"    :   "Xml2xsfs_Set"
+            },
+
+        "AbinitioMD":{
+            "initdir"   :   "MDInitial",
+            "nsamples"  :   "i5",
+
+            "nn_opt"   :   false,
+            "nn_path"   :   null,
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default",
+            "outdir"    :   "AbinitioMD_Set"
+            },
+
+        "DFTOpt":{
+            "initdir"   :   "",
+            "nsamples"  :   -1,
+
+            "nn_opt"    :   false,
+            "nn_path"   :   null,
+            "cell_filter" : false,
+
+            "outfmt"    :   "default",
+            "index"     :   "default",
+            "isdataset" :   "default",
+            "seed"      :   "default",
+            "inc_init"  :   "default",
+            "outdir"    :   "DFTOpt_Set"
+            },
+
+        "Vasp":{
+            "mode"          :   "bulk",
+            "continue_flag" :   true,
+            "fast_relax_steps" : "default"
+            },
+
+        "VaspCustomized":{
+            }
+
+    },
+
+    "Taylor":{
+        "outdir"        :   "01-Taylor",
+        "do_taylor"     :   false,
+        "dimension"     :   "default",
+        "innerpaths"    :   {},
+        "extpaths"      :   {}
+    },
+
+    "TaylorDetails":{
+        "1D":{
+            "dr"        :   0.02
+            },
+        "3D":{
+            "drmax"     :   0.02,
+            "nsamples"  :   20,
+            "fcut"      :   "default",
+            "nfirst"    :   "default"
+            }
+    },
+
+    "Generate":{
+        "outdir"        :   "02-Generate",
+        "infile"        :   "generate.in",
+        "info"          :   "Info_generate",
+        "output"        :   "out.train",
+        "timing"        :   false,
+        "debug"         :   false
+    },
+
+    "Rrange":{
+        "rmin"          :   0.45,
+        "rcut"          :   6.5,
+        "aphcut"        :   4.5
+    },
+
+    "StpDetails":{ 
+        "Spherical_Chebyshev":{
+            "nmax"      :   5,
+            "lmax"      :   6
+            },
+        
+        "Behler2011":{
+            "nG2"       :   10,
+            "nG4"       :   5,
+            "G2_eta"    :   "normal",
+            "G2_Rs"     :   0.0
+            }
+    },
+
+    "Train":{
+        "initdir"       :  null,
+        "outdir"        :  "03-Train",
+        "infile"        :  "train.in",
+        "info"          :  "Info_train",
+        "iterations"    :  100,
+        "maxenergy"     :  null,
+        "timing"        :  true,
+        "debug"         :  false,
+        "save_energies" :  false,
+        "nn_rseed"      :  null,
+        "scr_path"      :  null,
+        "method"        :  "bfgs"
+    },
+
+    "TrainDetails":{
+        "bfgs":{
+            "lambda"    :  "default"
+            },
+
+        "ekf":{
+            "lambda"    :  "default",
+            "lambda0"   :  "default",
+            "state"     :  "default",
+            "pnoise"    :  "default",
+            "adaptive"  :  "default",
+            "wgroup"    :  "default"
+            },
+
+        "lm":{
+            "batchsize" :  8000,
+            "learnrate" :  0.1,
+            "iter"      :  3,
+            "conv"      :  0.001,
+            "adjust"    :  5.0
+            },
+
+        "online_sd":{
+            "alpha"     :  0.25,
+            "gamma"     :  "5.0d-7",
+            "decay"     :  "default"
+            },
+
+        "adam":{
+            "mu"        :  "default",
+            "b1"        :  "default",
+            "b2"        :  "default",
+            "eps"       :  "default",
+            "samplesize":  "default",
+            "batchsize" :  "default",
+            "amsgrad"   :  "default",
+            "decay"     :  "default",
+            "wr"        :  "default",
+            "lrmin"     :  "default",
+            "t0"        :  "default",
+            "tm"        :  "default"
+            },
+
+        "minibatch_sgd":{
+            "mu"        :  "default",
+            "b1"        :  "default",
+            "nesterov"  :  "default",
+            "batchsize" :  "default",
+            "wr"        :  "default",
+            "lrmin"     :  "default",
+            "t0"        :  "default",
+            "tm"        :  "default"
+            },
+
+        "minibatch_sqm":{
+            "dt"        :  "default",
+            "dtmin"     :  "default",
+            "t0"        :  "default",
+            "lambda"    :  "default",
+            "samplesize":  "default",
+            "batchsize" :  "default"
+            }
+    },
+
+    "Visual" : {
+        "outdir"  :  "visual"
+    }
+}

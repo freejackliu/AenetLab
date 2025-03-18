@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+import sys
+import os
+from ase.io import read
+from aenet.xsf import write_xsf
+
+fn = sys.argv[1]
+suffix = fn.split('.')[-1]
+if suffix == 'xml':
+    traj = read(sys.argv[1], format='vasp-xml', index=':')
+else:
+    traj = read(sys.argv[1], index=':')
+
+if not os.path.isdir('xsfs'):
+    os.makedirs('xsfs')
+for i, a in enumerate(traj):
+    write_xsf('xsfs/%i.xsf'%i, a)

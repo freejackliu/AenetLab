@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+
+from aenet.calculator import ANNCalculator
+from aenet.AenetLab.aenet_io import read_list, aread, load_nnfiles
+from aenet.AenetLab.create import env_init
+import numpy as np
+from aenet.opt import opt
+import aenet.AenetLab as AL
+import os
+import json
+import argparse
+
+parser = argparse.ArgumentParser(
+        description="""Optimize a structure by NN potentials""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--index','-i',type=int,help="Index of nnpots sub-dir in the train dir")
+parser.add_argument('--nnpath','-nnp',type=str,help="Path to load the NN potentials if specified")
+parser.add_argument('--scpath','-scp',type=str,required=True,help="Path to assign an initial dataset for optimization")
+parser.add_argument('--nstep','-n',type=int,help="The max step accepted for optimization")
+args = parser.parse_args()
+
+if args.nnpath and args.index:
+    raise AttributeError("'nnpath' and 'index' can not be specified together")
+elif not (args.nnpath or args.index):
+    raise AttributeError(" Either 'nnpath' or 'index' should be specified")
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab  = AL.AenetLab(textjson)
+    v_outdir = os.path.abspath(args.scpath)
+   
+    nn_files_path = ''
+    if args.nnpath:
+        nn_files_path = os.path.abspath(args.nnpath)
+    else:
+        if args.index:
+            nn_files_path = os.path.join(aelab.trn['outdir'],'%d_nnpots'%args.index)
+        else:
+            nn_files_path = os.path.join(aelab.trn['outdir'],'1_nnpots')
+    if nn_files_path == '':
+        raise Exception("Please assign the path to NN potentials")
+    potentials = load_nnfiles(nn_files_path)
+    ann_calc = ANNCalculator(potentials=potentials)
+    
+    #list_path = os.path.join(v_outdir,'list')
+    #if os.path.exists(list_path):
+    #    v_outdir_list = read_list(list_path)
+
+    #else:
+    v_outdir_list = env_init(v_outdir, 'traj')
+
+    for v in v_outdir_list:
+        a, tag = aread(v,aelab.Z_of_type,index_list=-1)
+        print("File path : %s"%v)
+        a.set_calculator(ann_calc)
+        final_a = opt(a, traj_name='traj/%s-opt.traj'%tag, steps=args.nstep)
+        final_a.write(v, format='vasp')

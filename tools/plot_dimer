@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+
+import aenet.AenetLab as AL
+from aenet.AenetLab.plottools import plot_dimer
+import json
+import os
+import argparse
+
+parser = argparse.ArgumentParser(
+       description="""Plot dimer E-d curves to check if the results are reliable""",
+       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--index','-i',required=True,type=int,help="Index of nnpots sub-dir in train dir")
+args = parser.parse_args()
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+    aelab = AL.AenetLab(textjson)
+    plot_dimer(aelab,index=args.index)

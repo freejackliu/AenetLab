@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import aenet.AenetLab as AL
+from aenet.AenetLab.aenet_io import read_list, write_list
+import json
+
+parser = argparse.ArgumentParser(
+            description="Create datasets in certain style",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+
+add = parser.add_argument
+add("--initdir", help="Initial directory for the dataset creation")
+add("--outdir", help="Output directory for the dataset")
+add("--ignore", action="store_true", help="Whether to ignore the creation iteration")
+args = parser.parse_args()
+#TODO
+
+Njson = 0
+for na in os.listdir(os.getcwd()):
+    if na.split('.')[-1] == 'json':
+        Njson += 1
+        json_name = na
+if Njson != 1:
+    raise Exception("AenetLab can only read one json file")
+
+with open(json_name,'r') as f:
+    textjson = json.load(f)
+
+style = textjson['Create']['style']
+if args.initdir:
+    textjson['CreateDetails'][style]['initdir'] = args.initdir
+if args.outdir:
+    textjson['CreateDetails'][style]['outdir'] = args.outdir
+
+aelab = AL.AenetLab(textjson)
+if args.ignore:
+    outdir = textjson['CreateDetails'][style]['outdir']
+    calc_list = os.path.join(outdir, 'calc_list')
+    poscar_paths = read_list(calc_list,relative=True)
+    ignore_poscar = poscar_paths.pop(0)
+    os.remove(os.path.join(outdir, ignore_poscar))
+    write_list(calc_list,poscar_paths)
+aelab.create()
